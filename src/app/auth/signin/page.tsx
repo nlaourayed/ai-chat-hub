@@ -1,8 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { signIn } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
+import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -13,12 +14,22 @@ export default function SignIn() {
   const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
+  const [message, setMessage] = useState('')
   const router = useRouter()
+  const searchParams = useSearchParams()
+
+  useEffect(() => {
+    const msgParam = searchParams.get('message')
+    if (msgParam) {
+      setMessage(msgParam)
+    }
+  }, [searchParams])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
     setError('')
+    setMessage('')
 
     try {
       const result = await signIn('credentials', {
@@ -76,6 +87,11 @@ export default function SignIn() {
                 disabled={isLoading}
               />
             </div>
+            {message && (
+              <div className="text-sm text-green-600 text-center">
+                {message}
+              </div>
+            )}
             {error && (
               <div className="text-sm text-red-600 text-center">
                 {error}
@@ -89,6 +105,13 @@ export default function SignIn() {
               {isLoading ? 'Signing in...' : 'Sign In'}
             </Button>
           </form>
+          
+          <div className="mt-4 text-center text-sm">
+            <span className="text-gray-600">Don't have an account? </span>
+            <Link href="/auth/signup" className="text-blue-600 hover:underline">
+              Create account
+            </Link>
+          </div>
         </CardContent>
       </Card>
     </div>
