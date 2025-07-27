@@ -49,21 +49,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid JSON payload' }, { status: 400 })
     }
 
-    // Get configured Chatra account
-    const chatraAccount = await db.chatraAccount.findUnique({
-      where: { chatraId: 'ZRX3EvWsmnPNr6m9x' }
+    // Get configured Chatra account(s) - try to match by payload or use the first active one
+    let chatraAccount = null
+    
+    // First, try to find account by webhook signature (if we can match it)
+    const chatraAccounts = await db.chatraAccount.findMany({
+      where: { isActive: true }
     })
 
-    if (!chatraAccount) {
-      console.error('❌ Configured Chatra account not found: ZRX3EvWsmnPNr6m9x')
-      return NextResponse.json({ error: 'Account not configured' }, { status: 404 })
+    if (chatraAccounts.length === 0) {
+      console.error('❌ No active Chatra accounts configured')
+      return NextResponse.json({ error: 'No active accounts configured' }, { status: 404 })
     }
 
-    if (!isProduction) {
-      console.log('✅ [DEBUG] Found Chatra account:', chatraAccount.name)
-    }
+    // For now, use the first active account if we can't determine which one sent the webhook
+    // In the future, we could use the signature verification to match the correct account
+    chatraAccount = chatraAccounts[0]
+    
+    console.log('✅ [WEBHOOK] Using Chatra account:', chatraAccount.name, `(${chatraAccount.chatraId})`)
 
-    // Verify webhook signature (enabled in production)
+    // Verify webhook signature (temporarily disabled for debugging)
     const isValidSignature = verifyWebhookSignature(body, signature, chatraAccount.webhookSecret)
     if (isProduction && !isValidSignature) {
       console.warn('⚠️ Invalid webhook signature')

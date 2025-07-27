@@ -51,6 +51,14 @@ export function DashboardHeader({ user }: DashboardHeaderProps) {
               >
                 Knowledge Base
               </Link>
+              <Link 
+                href="/dashboard/chatra-accounts" 
+                className={`text-sm font-medium transition-colors hover:text-blue-600 ${
+                  pathname === '/dashboard/chatra-accounts' ? 'text-blue-600' : 'text-gray-600'
+                }`}
+              >
+                Chatra Accounts
+              </Link>
             </nav>
           </div>
           
