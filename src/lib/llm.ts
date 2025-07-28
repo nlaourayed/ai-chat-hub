@@ -53,43 +53,94 @@ export async function retrieveContext(
     // Convert embedding to pgvector format
     const embeddingString = `[${queryEmbedding.join(',')}]`
     
-    // Perform vector similarity search
-    // Note: This uses raw SQL because Prisma doesn't natively support vector operations yet
-    // We store embeddings as text strings, so we need to cast them back to vectors for comparison
-    const results = await db.$queryRaw`
-      SELECT 
-        id,
-        content,
-        source,
-        source_id,
-        metadata,
-        1 - (embedding::vector <=> ${embeddingString}::vector) as similarity
-      FROM knowledge_base 
-      WHERE embedding IS NOT NULL
-        AND embedding != ''
-        AND 1 - (embedding::vector <=> ${embeddingString}::vector) > ${similarityThreshold}
-      ORDER BY embedding::vector <=> ${embeddingString}::vector
-      LIMIT ${limit}
-    ` as Array<{
-      id: string;
-      content: string;
-      source: string;
-      source_id?: string;
-      metadata?: Record<string, unknown>;
-      similarity: number;
-    }>
-
-    return results.map((row) => ({
-      content: row.content,
-      source: row.source,
-      sourceId: row.source_id,
-      similarity: typeof row.similarity === 'string' ? parseFloat(row.similarity) : row.similarity,
-      metadata: row.metadata
-    }))
+    // First, check if pgvector extension is available
+    try {
+      // Test if vector operations work
+      const vectorTest = await db.$queryRaw`SELECT '1'::text WHERE EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'vector')`
+      console.log('🔍 [RAG] Vector extension test:', vectorTest)
+    } catch (error) {
+      console.warn('⚠️ [RAG] pgvector extension not available, falling back to text search')
+      
+      // Fallback: Simple text search without vector similarity
+      const textResults = await db.knowledgeBase.findMany({
+        where: {
+          content: {
+            contains: query,
+            mode: 'insensitive'
+          }
+        },
+        take: limit
+      })
+      
+      return textResults.map((row) => ({
+        content: row.content,
+        source: row.source,
+        sourceId: row.sourceId || undefined,
+        similarity: 0.8, // Default similarity for text matches
+        metadata: row.metadata as Record<string, unknown>
+      }))
+    }
+    
+    // Try vector similarity search with better error handling
+    try {
+      const results = await db.$queryRaw`
+        SELECT 
+          id,
+          content,
+          source,
+          source_id,
+          metadata,
+          1 - (embedding::vector <=> ${embeddingString}::vector) as similarity
+        FROM knowledge_base 
+        WHERE embedding IS NOT NULL
+          AND embedding != ''
+          AND 1 - (embedding::vector <=> ${embeddingString}::vector) > ${similarityThreshold}
+        ORDER BY embedding::vector <=> ${embeddingString}::vector
+        LIMIT ${limit}
+      ` as Array<{
+        id: string;
+        content: string;
+        source: string;
+        source_id?: string;
+        metadata?: Record<string, unknown>;
+        similarity: number;
+      }>
+      
+      return results.map((row) => ({
+        content: row.content,
+        source: row.source,
+        sourceId: row.source_id,
+        similarity: typeof row.similarity === 'string' ? parseFloat(row.similarity) : row.similarity,
+        metadata: row.metadata
+      }))
+      
+    } catch (vectorError) {
+      console.error('❌ [RAG] Vector similarity search failed:', vectorError)
+      console.log('🔄 [RAG] Falling back to text search...')
+      
+      // Fallback: Simple text search
+      const textResults = await db.knowledgeBase.findMany({
+        where: {
+          content: {
+            contains: query,
+            mode: 'insensitive'
+          }
+        },
+        take: limit
+      })
+      
+      return textResults.map((row) => ({
+        content: row.content,
+        source: row.source,
+        sourceId: row.sourceId || undefined,
+        similarity: 0.8, // Default similarity for text matches
+        metadata: row.metadata as Record<string, unknown>
+      }))
+    }
+    
   } catch (error) {
-    console.error('Error retrieving context:', error)
-    // Return empty array if knowledge base is not populated or there's an error
-    return []
+    console.error('Error in retrieveContext:', error)
+    return [] // Return empty array if all methods fail
   }
 }
 

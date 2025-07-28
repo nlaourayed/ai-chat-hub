@@ -33,44 +33,72 @@ export function ConversationView({ conversation }: ConversationViewProps) {
   }
 
   const handleApproveResponse = async (messageId: string) => {
+    if (!messageId) {
+      alert('Invalid message ID')
+      return
+    }
+    
     try {
+      console.log('🔄 Approving message:', messageId)
       const { approveMessage } = await import('@/lib/actions')
-      await approveMessage(messageId, true) // Auto-extract to knowledge base
-      window.location.reload() // Simple refresh to show changes
+      const result = await approveMessage(messageId, true)
+      console.log('✅ Approve result:', result)
+      
+      // Instead of page reload, try to refresh just this component
+      window.location.reload()
     } catch (error) {
-      console.error('Error approving response:', error)
-      alert('Failed to approve response. Please try again.')
+      console.error('❌ Error approving response:', error)
+      alert(`Failed to approve response: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
 
   const handleRejectResponse = async (messageId: string) => {
+    if (!messageId) {
+      alert('Invalid message ID')
+      return
+    }
+    
     try {
+      console.log('🔄 Rejecting message:', messageId)
       const { rejectMessage } = await import('@/lib/actions')
-      await rejectMessage(messageId)
-      window.location.reload() // Simple refresh to show changes
+      const result = await rejectMessage(messageId)
+      console.log('✅ Reject result:', result)
+      
+      // Instead of page reload, try to refresh just this component
+      window.location.reload()
     } catch (error) {
-      console.error('Error rejecting response:', error)
-      alert('Failed to reject response. Please try again.')
+      console.error('❌ Error rejecting response:', error)
+      alert(`Failed to reject response: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
 
   const handleEditMessage = (messageId: string, currentContent: string) => {
+    if (!messageId || !currentContent) {
+      alert('Invalid message data')
+      return
+    }
     setEditingMessageId(messageId)
     setEditedContent(currentContent)
   }
 
   const handleSaveEdit = async (messageId: string) => {
-    if (!editedContent.trim()) return
+    if (!editedContent.trim()) {
+      alert('Message content cannot be empty')
+      return
+    }
     
     try {
+      console.log('🔄 Updating message:', messageId, 'with content:', editedContent.substring(0, 50) + '...')
       const { updateMessageContent } = await import('@/lib/actions')
-      await updateMessageContent(messageId, editedContent)
+      const result = await updateMessageContent(messageId, editedContent)
+      console.log('✅ Update result:', result)
+      
       setEditingMessageId(null)
       setEditedContent('')
-      window.location.reload() // Simple refresh to show changes
+      window.location.reload()
     } catch (error) {
-      console.error('Error updating message:', error)
-      alert('Failed to update message. Please try again.')
+      console.error('❌ Error updating message:', error)
+      alert(`Failed to update message: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
 
@@ -189,8 +217,13 @@ export function ConversationView({ conversation }: ConversationViewProps) {
                           </span>
                           
                           {/* LLM Response Actions */}
-                          {message.senderType === 'llm' && message.isApproved === null && (
+                          {message.senderType === 'llm' && (
                             <div className="flex space-x-2">
+                              {/* Debug info */}
+                              <span className="text-xs text-gray-400">
+                                [Debug: id={message.id?.substring(0, 8)}, approved={String(message.isApproved)}]
+                              </span>
+                              
                               {editingMessageId !== message.id ? (
                                 <>
                                   <Button
@@ -201,24 +234,33 @@ export function ConversationView({ conversation }: ConversationViewProps) {
                                   >
                                     ✏️ Edit
                                   </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="text-xs px-2 py-1 h-6"
-                                    onClick={() => handleApproveResponse(message.id)}
-                                  >
-                                    ✓ Approve
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="text-xs px-2 py-1 h-6"
-                                    onClick={() => handleRejectResponse(message.id)}
-                                  >
-                                    ✗ Reject
-                                  </Button>
+                                  
+                                  {/* Show approve/reject for pending messages or allow re-approval */}
+                                  {(message.isApproved === null || message.isApproved === false) && (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="text-xs px-2 py-1 h-6"
+                                      onClick={() => handleApproveResponse(message.id)}
+                                    >
+                                      ✓ Approve
+                                    </Button>
+                                  )}
+                                  
+                                  {(message.isApproved === null || message.isApproved === true) && (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="text-xs px-2 py-1 h-6"
+                                      onClick={() => handleRejectResponse(message.id)}
+                                    >
+                                      ✗ Reject
+                                    </Button>
+                                  )}
                                 </>
-                              ) : null}
+                              ) : (
+                                <span className="text-xs text-gray-500">Editing...</span>
+                              )}
                             </div>
                           )}
                           
