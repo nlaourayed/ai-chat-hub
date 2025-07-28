@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -32,7 +32,7 @@ export function ConversationView({ conversation }: ConversationViewProps) {
     }
   }
 
-  const handleApproveResponse = async (messageId: string) => {
+  const handleApproveResponse = useCallback(async (messageId: string) => {
     if (!messageId) {
       alert('Invalid message ID')
       return
@@ -50,9 +50,9 @@ export function ConversationView({ conversation }: ConversationViewProps) {
       console.error('❌ Error approving response:', error)
       alert(`Failed to approve response: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
-  }
+  }, [])
 
-  const handleRejectResponse = async (messageId: string) => {
+  const handleRejectResponse = useCallback(async (messageId: string) => {
     if (!messageId) {
       alert('Invalid message ID')
       return
@@ -70,18 +70,18 @@ export function ConversationView({ conversation }: ConversationViewProps) {
       console.error('❌ Error rejecting response:', error)
       alert(`Failed to reject response: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
-  }
+  }, [])
 
-  const handleEditMessage = (messageId: string, currentContent: string) => {
+  const handleEditMessage = useCallback((messageId: string, currentContent: string) => {
     if (!messageId || !currentContent) {
       alert('Invalid message data')
       return
     }
     setEditingMessageId(messageId)
     setEditedContent(currentContent)
-  }
+  }, [])
 
-  const handleSaveEdit = async (messageId: string) => {
+  const handleSaveEdit = useCallback(async (messageId: string) => {
     if (!editedContent.trim()) {
       alert('Message content cannot be empty')
       return
@@ -100,12 +100,12 @@ export function ConversationView({ conversation }: ConversationViewProps) {
       console.error('❌ Error updating message:', error)
       alert(`Failed to update message: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
-  }
+  }, [editedContent])
 
-  const handleCancelEdit = () => {
+  const handleCancelEdit = useCallback(() => {
     setEditingMessageId(null)
     setEditedContent('')
-  }
+  }, [])
 
   const clientDisplay = conversation.clientName || conversation.clientEmail || 'Anonymous User'
 
@@ -151,9 +151,9 @@ export function ConversationView({ conversation }: ConversationViewProps) {
             <CardContent>
               <ScrollArea className="h-96 w-full">
                 <div className="space-y-4 pr-4">
-                  {conversation.messages.map((message) => (
+                  {conversation.messages.map((message, index) => (
                     <div
-                      key={message.id}
+                      key={message.id || `message-${index}`}
                       className={`flex ${
                         message.senderType === 'client' ? 'justify-start' : 'justify-end'
                       }`}
@@ -204,7 +204,7 @@ export function ConversationView({ conversation }: ConversationViewProps) {
                                 className="text-xs px-2 py-1 h-6"
                                 onClick={handleCancelEdit}
                               >
-                                ✗ Cancel
+                                ❌ Cancel
                               </Button>
                             </div>
                           </div>
@@ -217,13 +217,8 @@ export function ConversationView({ conversation }: ConversationViewProps) {
                           </span>
                           
                           {/* LLM Response Actions */}
-                          {message.senderType === 'llm' && (
+                          {message.senderType === 'llm' && message.id && (
                             <div className="flex space-x-2">
-                              {/* Debug info */}
-                              <span className="text-xs text-gray-400">
-                                [Debug: id={message.id?.substring(0, 8)}, approved={String(message.isApproved)}]
-                              </span>
-                              
                               {editingMessageId !== message.id ? (
                                 <>
                                   <Button

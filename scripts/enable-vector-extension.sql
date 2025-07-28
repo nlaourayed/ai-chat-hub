@@ -11,7 +11,14 @@ SELECT * FROM pg_extension WHERE extname = 'vector';
 SELECT '[1,2,3]'::vector <=> '[1,2,4]'::vector as distance;
 
 -- 4. Check existing knowledge_base table structure
-\d knowledge_base;
+SELECT 
+    column_name, 
+    data_type, 
+    is_nullable,
+    column_default
+FROM information_schema.columns 
+WHERE table_name = 'knowledge_base' 
+ORDER BY ordinal_position;
 
 -- 5. If you need to recreate the embedding column as proper vector type:
 -- (Only run this if you want to convert from text to vector type)
@@ -29,7 +36,7 @@ SELECT '[1,2,3]'::vector <=> '[1,2,4]'::vector as distance;
 -- ON knowledge_base USING ivfflat (embedding_vector vector_cosine_ops) 
 -- WITH (lists = 100);
 
--- Check if everything is working
+-- 6. Check if everything is working
 SELECT 
   id, 
   content, 
