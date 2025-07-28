@@ -66,7 +66,17 @@ export function verifyWebhookSignature(
       .update(payload)
       .digest('hex')
     
-    return signature === expectedSignature || signature === `sha256=${expectedSignature}`
+    const expectedWithPrefix = `sha256=${expectedSignature}`
+    
+    // Debug logging
+    console.log('🔐 [SIGNATURE] Verification details:')
+    console.log('  - Received signature:', signature)
+    console.log('  - Expected (raw hex):', expectedSignature)
+    console.log('  - Expected (with prefix):', expectedWithPrefix)
+    console.log('  - Raw match:', signature === expectedSignature)
+    console.log('  - Prefix match:', signature === expectedWithPrefix)
+    
+    return signature === expectedSignature || signature === expectedWithPrefix
   } catch (error) {
     console.error('Error verifying webhook signature:', error)
     return false
