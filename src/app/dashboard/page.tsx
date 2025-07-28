@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import { authOptions } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { DashboardHeader } from '@/components/dashboard/DashboardHeader'
-import { DashboardContent } from '@/components/dashboard/DashboardContent'
+import { ChatLayout } from '@/components/dashboard/ChatLayout'
 
 export default async function Dashboard() {
   const session = await getServerSession(authOptions)
@@ -48,12 +48,11 @@ export default async function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="h-screen flex flex-col bg-gray-50">
       <DashboardHeader user={session.user} />
-      
-      <main className="container mx-auto px-4 py-8">
-        <DashboardContent initialData={initialData} />
-      </main>
+      <div className="flex-1 overflow-hidden">
+        <ChatLayout initialData={initialData} />
+      </div>
     </div>
   )
 } 
