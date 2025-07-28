@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Wifi, WifiOff } from 'lucide-react'
 import type { ConversationViewProps } from '@/types'
 import { approveMessage, rejectMessage, updateMessageContent, sendAgentMessage } from '@/lib/actions'
 
@@ -19,6 +19,63 @@ export function ConversationView({ conversation }: ConversationViewProps) {
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
   const [editedContent, setEditedContent] = useState('')
   const [processingMessageId, setProcessingMessageId] = useState<string | null>(null)
+  const [isConnected, setIsConnected] = useState(false)
+  const [lastUpdate, setLastUpdate] = useState<Date>(new Date())
+  const eventSourceRef = useRef<EventSource | null>(null)
+
+  // Auto-refresh using Server-Sent Events
+  useEffect(() => {
+    if (!conversation?.id) return
+
+    console.log('🔄 Setting up SSE connection for conversation:', conversation.id)
+    
+    const eventSource = new EventSource(`/api/conversation/${conversation.id}/updates`)
+    eventSourceRef.current = eventSource
+    
+    eventSource.onopen = () => {
+      console.log('✅ SSE connection established')
+      setIsConnected(true)
+    }
+
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data)
+        console.log('📨 SSE message received:', data.type)
+        
+        switch (data.type) {
+          case 'connected':
+            setIsConnected(true)
+            break
+          case 'messages':
+            console.log('💬 New messages detected, refreshing...', data.messages.length)
+            setLastUpdate(new Date())
+            router.refresh()
+            break
+          case 'heartbeat':
+            // Keep connection alive
+            break
+          case 'error':
+            console.error('❌ SSE error:', data.message)
+            break
+        }
+      } catch (error) {
+        console.error('❌ Failed to parse SSE message:', error)
+      }
+    }
+
+    eventSource.onerror = (error) => {
+      console.error('❌ SSE connection error:', error)
+      setIsConnected(false)
+    }
+
+    // Cleanup on unmount
+    return () => {
+      console.log('🧹 Cleaning up SSE connection')
+      eventSource.close()
+      eventSourceRef.current = null
+      setIsConnected(false)
+    }
+  }, [conversation?.id, router])
 
   const handleSendMessage = async () => {
     if (!newMessage.trim()) return
@@ -31,6 +88,11 @@ export function ConversationView({ conversation }: ConversationViewProps) {
       const result = await sendAgentMessage(conversation.id, newMessage.trim())
       
       console.log('✅ Message sent successfully:', result)
+      
+      if (result.warning) {
+        alert(`⚠️ Warning: ${result.warning}`)
+      }
+      
       setNewMessage('')
       
       // Refresh to show the new message
@@ -175,6 +237,26 @@ export function ConversationView({ conversation }: ConversationViewProps) {
               )}
             </div>
           </div>
+        </div>
+        
+        {/* Connection Status Indicator */}
+        <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-1">
+            {isConnected ? (
+              <>
+                <Wifi className="w-4 h-4 text-green-600" />
+                <span className="text-sm text-green-600">Live Updates</span>
+              </>
+            ) : (
+              <>
+                <WifiOff className="w-4 h-4 text-red-600" />
+                <span className="text-sm text-red-600">Disconnected</span>
+              </>
+            )}
+          </div>
+          <span className="text-xs text-gray-500">
+            Last update: {lastUpdate.toLocaleTimeString()}
+          </span>
         </div>
       </div>
 

@@ -260,19 +260,35 @@ export async function sendMessageToChatra(
 
     console.log('🔑 [CHATRA] Using account:', chatraAccount.name, chatraAccount.chatraId)
 
-    // Use correct authentication - typically just API key for Chatra
-    // Try different auth methods based on Chatra API docs
+    // Prepare the correct request body format for Chatra API
+    const requestBody = {
+      clientId: conversationId, // Use the Chatra conversation ID as clientId
+      text: message.text,
+      agentId: undefined as string | undefined, // Will be set if we have it
+      agentEmail: undefined as string | undefined,
+      agentName: message.sender_name || 'AI Assistant'
+    }
+
+    // If we have specific agent info, use agentId, otherwise use agentEmail/agentName
+    if (chatraAccount.agentId) {
+      requestBody.agentId = chatraAccount.agentId
+    } else {
+      requestBody.agentEmail = chatraAccount.agentEmail || 'ai@assistant.com'
+      requestBody.agentName = message.sender_name || 'AI Assistant'
+    }
+
+    // Use correct Chatra API authentication format
+    const authHeader = `Chatra.Simple ${chatraAccount.publicApiKey}:${chatraAccount.apiKey}`
+
+    console.log('📡 [CHATRA] Making API request with auth format: Chatra.Simple...')
+
     const response = await fetch(`https://app.chatra.io/api/v1/messages`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${chatraAccount.apiKey}`, // Try Bearer token first
-        'Content-Type': 'application/json',
-        'X-Chatra-Account-Id': chatraAccount.chatraId
+        'Authorization': authHeader,
+        'Content-Type': 'application/json'
       },
-      body: JSON.stringify({
-        ...message,
-        conversation_id: conversationId
-      })
+      body: JSON.stringify(requestBody)
     })
 
     console.log('📡 [CHATRA] API Response status:', response.status)
@@ -282,28 +298,25 @@ export async function sendMessageToChatra(
       console.error(`❌ [CHATRA] API error: ${response.status} ${response.statusText}`)
       console.error('❌ [CHATRA] Error details:', errorText)
       
-      // Try alternative authentication method if Bearer fails
+      // Try alternative authentication method if the first one fails
       if (response.status === 401) {
-        console.log('🔄 [CHATRA] Trying Basic auth...')
+        console.log('🔄 [CHATRA] Trying Basic auth as fallback...')
         
-        const auth = Buffer.from(`${chatraAccount.apiKey}:`).toString('base64')
+        const basicAuth = Buffer.from(`${chatraAccount.apiKey}:`).toString('base64')
         const retryResponse = await fetch(`https://app.chatra.io/api/v1/messages`, {
           method: 'POST',
           headers: {
-            'Authorization': `Basic ${auth}`,
+            'Authorization': `Basic ${basicAuth}`,
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({
-            ...message,
-            conversation_id: conversationId
-          })
+          body: JSON.stringify(requestBody)
         })
 
         if (!retryResponse.ok) {
           const retryErrorText = await retryResponse.text()
           console.error(`❌ [CHATRA] Basic auth also failed: ${retryResponse.status}`)
           console.error('❌ [CHATRA] Retry error details:', retryErrorText)
-          throw new Error(`Chatra API error: ${retryResponse.status} ${retryResponse.statusText}`)
+          throw new Error(`Chatra API error: ${retryResponse.status} ${retryResponse.statusText} - ${retryErrorText}`)
         }
 
         const retryResult = await retryResponse.json()
@@ -311,11 +324,11 @@ export async function sendMessageToChatra(
         return true
       }
       
-      throw new Error(`Chatra API error: ${response.status} ${response.statusText}`)
+      throw new Error(`Chatra API error: ${response.status} ${response.statusText} - ${errorText}`)
     }
 
     const result = await response.json()
-    console.log('✅ [CHATRA] Message sent successfully with Bearer auth:', result)
+    console.log('✅ [CHATRA] Message sent successfully with Chatra.Simple auth:', result)
     return true
   } catch (error) {
     console.error('❌ [CHATRA] Error sending message:', error)

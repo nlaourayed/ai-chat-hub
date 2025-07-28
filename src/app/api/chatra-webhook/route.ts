@@ -202,6 +202,8 @@ async function handleRealChatraMessages(payload: WebhookPayload): Promise<void> 
     return
   }
 
+  let hasNewMessages = false
+
   // Process each message
   for (const message of payload.messages) {
     // Check if message already exists
@@ -225,6 +227,7 @@ async function handleRealChatraMessages(payload: WebhookPayload): Promise<void> 
       })
 
       console.log('✅ Created message:', message.id)
+      hasNewMessages = true
 
       // Generate LLM response for client messages
       if (message.type === 'client' && message.text) {
@@ -261,16 +264,18 @@ async function handleRealChatraMessages(payload: WebhookPayload): Promise<void> 
     }
   }
 
-  // Update conversation timestamp
-  if (payload.messages.length > 0) {
+  // Update conversation timestamp if we have new messages
+  if (hasNewMessages && payload.messages.length > 0) {
     const lastMessage = payload.messages[payload.messages.length - 1]
     await db.conversation.update({
       where: { id: conversation.id },
       data: { 
         lastMessageAt: new Date(lastMessage.createdAt || lastMessage.timestamp || new Date()),
-        updatedAt: new Date()
+        updatedAt: new Date() // This will trigger SSE updates
       }
     })
+    
+    console.log('✅ Updated conversation timestamp for real-time updates')
   }
 }
 

@@ -70,8 +70,6 @@ export async function approveMessage(messageId: string, extractToKnowledge: bool
       console.log('🔄 [APPROVE] Conversation ID:', message.conversation.chatraConversationId)
       console.log('🔄 [APPROVE] Message content:', message.content.substring(0, 100) + '...')
       
-      const { sendMessageToChatra } = await import('./chatra')
-      
       const success = await sendMessageToChatra(
         message.conversation.chatraAccount.id,
         message.conversation.chatraConversationId,
@@ -207,23 +205,7 @@ export async function sendAgentMessage(conversationId: string, content: string) 
     console.log('🔄 [AGENT] Found conversation:', conversation.chatraConversationId)
     console.log('🔄 [AGENT] Chatra account:', conversation.chatraAccount?.name)
 
-    // Try to send message to Chatra
-    let chatraSendSuccess = false
-    if (conversation.chatraAccount) {
-      chatraSendSuccess = await sendMessageToChatra(
-        conversation.chatraAccount.id,
-        conversation.chatraConversationId,
-        {
-          text: content,
-          sender_type: 'agent',
-          sender_name: session.user.name || session.user.email
-        }
-      )
-    } else {
-      console.warn('⚠️ [AGENT] No Chatra account found, message will only be stored locally')
-    }
-
-    // Always create message record in our database, regardless of Chatra success
+    // Always create message record in our database first
     const message = await db.message.create({
       data: {
         conversationId,
@@ -243,6 +225,27 @@ export async function sendAgentMessage(conversationId: string, content: string) 
         updatedAt: new Date()
       }
     })
+
+    // Try to send message to Chatra
+    let chatraSendSuccess = false
+    if (conversation.chatraAccount) {
+      try {
+        chatraSendSuccess = await sendMessageToChatra(
+          conversation.chatraAccount.id,
+          conversation.chatraConversationId,
+          {
+            text: content,
+            sender_type: 'agent',
+            sender_name: session.user.name || session.user.email
+          }
+        )
+      } catch (chatraError) {
+        console.error('❌ [AGENT] Error sending to Chatra:', chatraError)
+        chatraSendSuccess = false
+      }
+    } else {
+      console.warn('⚠️ [AGENT] No Chatra account found, message will only be stored locally')
+    }
 
     if (chatraSendSuccess) {
       console.log('✅ [AGENT] Message sent to Chatra and saved to database')

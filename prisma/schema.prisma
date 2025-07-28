@@ -61,9 +61,15 @@ model ChatraAccount {
   id            String        @id @default(cuid())
   name          String        // Friendly name for the account
   chatraId      String        @unique @map("chatra_id") // Chatra account ID
-  apiKey        String        @map("api_key") // Chatra API key
+  apiKey        String        @map("api_key") // Chatra private API key
+  publicApiKey  String?       @map("public_api_key") // Public API key for Chatra.Simple authentication
   webhookSecret String        @map("webhook_secret") // Webhook verification secret
   isActive      Boolean       @default(true) @map("is_active")
+  
+  // Optional agent information for message sending
+  agentId       String?       @map("agent_id") // Specific Chatra agent ID
+  agentEmail    String?       @map("agent_email") // Agent email for creating dummy agents
+  
   createdAt     DateTime      @default(now()) @map("created_at")
   updatedAt     DateTime      @updatedAt @map("updated_at")
   
