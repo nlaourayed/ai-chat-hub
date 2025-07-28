@@ -55,6 +55,7 @@ export async function retrieveContext(
     
     // Perform vector similarity search
     // Note: This uses raw SQL because Prisma doesn't natively support vector operations yet
+    // We store embeddings as text strings, so we need to cast them back to vectors for comparison
     const results = await db.$queryRaw`
       SELECT 
         id,
@@ -62,11 +63,12 @@ export async function retrieveContext(
         source,
         source_id,
         metadata,
-        1 - (embedding <=> ${embeddingString}::vector) as similarity
+        1 - (embedding::vector <=> ${embeddingString}::vector) as similarity
       FROM knowledge_base 
       WHERE embedding IS NOT NULL
-        AND 1 - (embedding <=> ${embeddingString}::vector) > ${similarityThreshold}
-      ORDER BY embedding <=> ${embeddingString}::vector
+        AND embedding != ''
+        AND 1 - (embedding::vector <=> ${embeddingString}::vector) > ${similarityThreshold}
+      ORDER BY embedding::vector <=> ${embeddingString}::vector
       LIMIT ${limit}
     ` as Array<{
       id: string;

@@ -26,7 +26,18 @@ export async function POST(request: NextRequest) {
   try {
     // Get the raw body and headers
     const body = await request.text()
-    const signature = request.headers.get('x-chatra-signature') || request.headers.get('x-hub-signature-256') || ''
+    
+    // Check multiple possible signature header names and log all headers for debugging
+    const signature = request.headers.get('x-chatra-signature') || 
+                     request.headers.get('x-hub-signature-256') || 
+                     request.headers.get('x-signature') ||
+                     request.headers.get('signature') || ''
+    
+    // Debug: Log all headers to see what Chatra is actually sending
+    console.log('📨 [WEBHOOK] Headers received:')
+    for (const [key, value] of request.headers.entries()) {
+      console.log(`  - ${key}: ${value}`)
+    }
     
     if (!isProduction) {
       console.log('🔍 [DEBUG] Raw body length:', body.length)
@@ -73,12 +84,16 @@ export async function POST(request: NextRequest) {
     
     // Add detailed debugging for signature verification
     console.log('🔐 [WEBHOOK] Signature verification details:')
-    console.log('  - Received signature:', signature)
+    console.log('  - Received signature:', signature || '(none)')
     console.log('  - Expected signature starts with:', chatraAccount.webhookSecret?.substring(0, 10) + '...')
     console.log('  - Body length:', body.length)
     console.log('  - Signature valid:', isValidSignature)
     
-    if (isProduction && !isValidSignature) {
+    // Handle different signature scenarios
+    if (!signature) {
+      console.log('⚠️ [WEBHOOK] No signature received - Chatra may not be configured to send signatures')
+      console.log('💡 [TIP] Check Chatra webhook settings or disable signature verification for this account')
+    } else if (isProduction && !isValidSignature) {
       console.warn('⚠️ Invalid webhook signature - signature mismatch')
       console.log('🔧 [DEBUG] To fix: ensure webhook secret in Chatra matches:', chatraAccount.webhookSecret)
       console.log('⚠️ [TEMP] Proceeding anyway for debugging - DISABLE THIS IN PRODUCTION!')
