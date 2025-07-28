@@ -247,6 +247,8 @@ export async function sendMessageToChatra(
   message: ChatraApiMessage
 ): Promise<boolean> {
   try {
+    console.log('🔄 [CHATRA] Sending message to conversation:', conversationId)
+    
     // Get Chatra account details
     const chatraAccount = await db.chatraAccount.findUnique({
       where: { id: chatraAccountId }
@@ -256,14 +258,16 @@ export async function sendMessageToChatra(
       throw new Error('Chatra account not found')
     }
 
-    // Use correct Messages API endpoint with Basic Auth
-    const auth = Buffer.from(`${chatraAccount.apiKey}:${chatraAccount.webhookSecret}`).toString('base64')
-    
+    console.log('🔑 [CHATRA] Using account:', chatraAccount.name, chatraAccount.chatraId)
+
+    // Use correct authentication - typically just API key for Chatra
+    // Try different auth methods based on Chatra API docs
     const response = await fetch(`https://app.chatra.io/api/v1/messages`, {
       method: 'POST',
       headers: {
-        'Authorization': `Basic ${auth}`,
-        'Content-Type': 'application/json'
+        'Authorization': `Bearer ${chatraAccount.apiKey}`, // Try Bearer token first
+        'Content-Type': 'application/json',
+        'X-Chatra-Account-Id': chatraAccount.chatraId
       },
       body: JSON.stringify({
         ...message,
@@ -271,17 +275,50 @@ export async function sendMessageToChatra(
       })
     })
 
+    console.log('📡 [CHATRA] API Response status:', response.status)
+
     if (!response.ok) {
       const errorText = await response.text()
-      console.error(`Chatra Messages API error: ${response.status} ${response.statusText}`, errorText)
+      console.error(`❌ [CHATRA] API error: ${response.status} ${response.statusText}`)
+      console.error('❌ [CHATRA] Error details:', errorText)
+      
+      // Try alternative authentication method if Bearer fails
+      if (response.status === 401) {
+        console.log('🔄 [CHATRA] Trying Basic auth...')
+        
+        const auth = Buffer.from(`${chatraAccount.apiKey}:`).toString('base64')
+        const retryResponse = await fetch(`https://app.chatra.io/api/v1/messages`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Basic ${auth}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            ...message,
+            conversation_id: conversationId
+          })
+        })
+
+        if (!retryResponse.ok) {
+          const retryErrorText = await retryResponse.text()
+          console.error(`❌ [CHATRA] Basic auth also failed: ${retryResponse.status}`)
+          console.error('❌ [CHATRA] Retry error details:', retryErrorText)
+          throw new Error(`Chatra API error: ${retryResponse.status} ${retryResponse.statusText}`)
+        }
+
+        const retryResult = await retryResponse.json()
+        console.log('✅ [CHATRA] Message sent successfully with Basic auth:', retryResult)
+        return true
+      }
+      
       throw new Error(`Chatra API error: ${response.status} ${response.statusText}`)
     }
 
     const result = await response.json()
-    console.log('Message sent successfully to Chatra:', result)
+    console.log('✅ [CHATRA] Message sent successfully with Bearer auth:', result)
     return true
   } catch (error) {
-    console.error('Error sending message to Chatra:', error)
+    console.error('❌ [CHATRA] Error sending message:', error)
     return false
   }
 }

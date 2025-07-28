@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { ArrowLeft } from 'lucide-react'
 import type { ConversationViewProps } from '@/types'
-import { approveMessage, rejectMessage, updateMessageContent } from '@/lib/actions'
+import { approveMessage, rejectMessage, updateMessageContent, sendAgentMessage } from '@/lib/actions'
 
 export function ConversationView({ conversation }: ConversationViewProps) {
   const router = useRouter()
@@ -25,12 +25,19 @@ export function ConversationView({ conversation }: ConversationViewProps) {
     
     setIsLoading(true)
     try {
-      // Here you would implement the API call to send a message
-      // For now, this is a placeholder
       console.log('Sending message:', newMessage)
+      
+      // Import and call the sendAgentMessage action
+      const result = await sendAgentMessage(conversation.id, newMessage.trim())
+      
+      console.log('✅ Message sent successfully:', result)
       setNewMessage('')
+      
+      // Refresh to show the new message
+      router.refresh()
     } catch (error) {
-      console.error('Error sending message:', error)
+      console.error('❌ Error sending message:', error)
+      alert(`Failed to send message: ${error instanceof Error ? error.message : 'Unknown error'}`)
     } finally {
       setIsLoading(false)
     }

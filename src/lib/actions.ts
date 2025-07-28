@@ -66,6 +66,10 @@ export async function approveMessage(messageId: string, extractToKnowledge: bool
 
     // Send the approved message to Chatra
     if (message.senderType === 'llm' && message.conversation.chatraAccount) {
+      console.log('🔄 [APPROVE] Sending approved message to Chatra...')
+      console.log('🔄 [APPROVE] Conversation ID:', message.conversation.chatraConversationId)
+      console.log('🔄 [APPROVE] Message content:', message.content.substring(0, 100) + '...')
+      
       const { sendMessageToChatra } = await import('./chatra')
       
       const success = await sendMessageToChatra(
@@ -79,11 +83,15 @@ export async function approveMessage(messageId: string, extractToKnowledge: bool
       )
 
       if (!success) {
-        console.error('Failed to send approved message to Chatra')
+        console.error('❌ [APPROVE] Failed to send approved message to Chatra')
         // Note: We don't throw here because the message is still approved in our system
       } else {
-        console.log('✅ Approved message sent to Chatra successfully')
+        console.log('✅ [APPROVE] Approved message sent to Chatra successfully')
       }
+    } else {
+      console.log('ℹ️ [APPROVE] Skipping Chatra send - not an LLM message or no Chatra account')
+      console.log('ℹ️ [APPROVE] Sender type:', message.senderType)
+      console.log('ℹ️ [APPROVE] Has Chatra account:', !!message.conversation.chatraAccount)
     }
 
     // Extract to knowledge base if it's an approved agent response to a client question
@@ -181,6 +189,10 @@ export async function sendAgentMessage(conversationId: string, content: string) 
   }
 
   try {
+    console.log('🔄 [AGENT] Sending agent message...')
+    console.log('🔄 [AGENT] Conversation ID:', conversationId)
+    console.log('🔄 [AGENT] Content:', content.substring(0, 100) + '...')
+    
     const conversation = await db.conversation.findUnique({
       where: { id: conversationId },
       include: {
@@ -192,44 +204,63 @@ export async function sendAgentMessage(conversationId: string, content: string) 
       throw new Error('Conversation not found')
     }
 
-    // Send message to Chatra
-    const success = await sendMessageToChatra(
-      conversation.chatraAccount.id,
-      conversation.chatraConversationId,
-      {
-        text: content,
-        sender_type: 'agent',
-        sender_name: session.user.name || session.user.email
-      }
-    )
+    console.log('🔄 [AGENT] Found conversation:', conversation.chatraConversationId)
+    console.log('🔄 [AGENT] Chatra account:', conversation.chatraAccount?.name)
 
-    if (success) {
-      // Create message record
-      await db.message.create({
-        data: {
-          conversationId,
-          content,
-          senderType: 'agent',
-          senderName: session.user.name || session.user.email,
-          messageType: 'text',
-          isApproved: true
+    // Try to send message to Chatra
+    let chatraSendSuccess = false
+    if (conversation.chatraAccount) {
+      chatraSendSuccess = await sendMessageToChatra(
+        conversation.chatraAccount.id,
+        conversation.chatraConversationId,
+        {
+          text: content,
+          sender_type: 'agent',
+          sender_name: session.user.name || session.user.email
         }
-      })
-
-      // Update conversation timestamp
-      await db.conversation.update({
-        where: { id: conversationId },
-        data: { 
-          lastMessageAt: new Date(),
-          updatedAt: new Date()
-        }
-      })
+      )
+    } else {
+      console.warn('⚠️ [AGENT] No Chatra account found, message will only be stored locally')
     }
 
+    // Always create message record in our database, regardless of Chatra success
+    const message = await db.message.create({
+      data: {
+        conversationId,
+        content,
+        senderType: 'agent',
+        senderName: session.user.name || session.user.email,
+        messageType: 'text',
+        isApproved: true
+      }
+    })
+
+    // Update conversation timestamp
+    await db.conversation.update({
+      where: { id: conversationId },
+      data: { 
+        lastMessageAt: new Date(),
+        updatedAt: new Date()
+      }
+    })
+
+    if (chatraSendSuccess) {
+      console.log('✅ [AGENT] Message sent to Chatra and saved to database')
+    } else {
+      console.warn('⚠️ [AGENT] Message saved to database but failed to send to Chatra')
+    }
+
+    revalidatePath('/dashboard')
     revalidatePath(`/dashboard/conversation/${conversationId}`)
-    return { success }
+    
+    return { 
+      success: true, 
+      message, 
+      chatraSent: chatraSendSuccess,
+      warning: !chatraSendSuccess ? 'Message saved but not sent to Chatra' : null
+    }
   } catch (error) {
-    console.error('Error sending agent message:', error)
+    console.error('❌ [AGENT] Error sending agent message:', error)
     throw error
   }
 }
