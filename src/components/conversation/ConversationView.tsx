@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -12,10 +13,12 @@ import type { ConversationViewProps } from '@/types'
 import { approveMessage, rejectMessage, updateMessageContent } from '@/lib/actions'
 
 export function ConversationView({ conversation }: ConversationViewProps) {
+  const router = useRouter()
   const [newMessage, setNewMessage] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
   const [editedContent, setEditedContent] = useState('')
+  const [processingMessageId, setProcessingMessageId] = useState<string | null>(null)
 
   const handleSendMessage = async () => {
     if (!newMessage.trim()) return
@@ -34,76 +37,87 @@ export function ConversationView({ conversation }: ConversationViewProps) {
   }
 
   const handleApproveResponse = useCallback(async (messageId: string) => {
-    if (!messageId) {
-      alert('Invalid message ID')
+    if (!messageId || processingMessageId) {
       return
     }
+    
+    setProcessingMessageId(messageId)
     
     try {
       console.log('🔄 Approving message:', messageId)
       const result = await approveMessage(messageId, true)
       console.log('✅ Approve result:', result)
       
-      // Instead of page reload, try to refresh just this component
-      window.location.reload()
+      // Use router refresh instead of window.location.reload()
+      router.refresh()
     } catch (error) {
       console.error('❌ Error approving response:', error)
       alert(`Failed to approve response: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    } finally {
+      setProcessingMessageId(null)
     }
-  }, [])
+  }, [router, processingMessageId])
 
   const handleRejectResponse = useCallback(async (messageId: string) => {
-    if (!messageId) {
-      alert('Invalid message ID')
+    if (!messageId || processingMessageId) {
       return
     }
+    
+    setProcessingMessageId(messageId)
     
     try {
       console.log('🔄 Rejecting message:', messageId)
       const result = await rejectMessage(messageId)
       console.log('✅ Reject result:', result)
       
-      // Instead of page reload, try to refresh just this component
-      window.location.reload()
+      // Use router refresh instead of window.location.reload()
+      router.refresh()
     } catch (error) {
       console.error('❌ Error rejecting response:', error)
       alert(`Failed to reject response: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    } finally {
+      setProcessingMessageId(null)
     }
-  }, [])
+  }, [router, processingMessageId])
 
   const handleEditMessage = useCallback((messageId: string, currentContent: string) => {
-    if (!messageId || !currentContent) {
-      alert('Invalid message data')
+    if (!messageId || !currentContent || processingMessageId) {
       return
     }
     setEditingMessageId(messageId)
     setEditedContent(currentContent)
-  }, [])
+  }, [processingMessageId])
 
   const handleSaveEdit = useCallback(async (messageId: string) => {
-    if (!editedContent.trim()) {
-      alert('Message content cannot be empty')
+    if (!editedContent.trim() || processingMessageId) {
       return
     }
     
+    setProcessingMessageId(messageId)
+    
     try {
-      console.log('🔄 Updating message:', messageId, 'with content:', editedContent.substring(0, 50) + '...')
+      console.log('🔄 Updating message:', messageId)
       const result = await updateMessageContent(messageId, editedContent)
       console.log('✅ Update result:', result)
       
       setEditingMessageId(null)
       setEditedContent('')
-      window.location.reload()
+      
+      // Use router refresh instead of window.location.reload()
+      router.refresh()
     } catch (error) {
       console.error('❌ Error updating message:', error)
       alert(`Failed to update message: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    } finally {
+      setProcessingMessageId(null)
     }
-  }, [editedContent])
+  }, [editedContent, router, processingMessageId])
 
   const handleCancelEdit = useCallback(() => {
+    if (processingMessageId) return
     setEditingMessageId(null)
     setEditedContent('')
-  }, [])
+  }, [processingMessageId])
 
   // Safety check for undefined conversation AFTER hooks
   if (!conversation) {
@@ -210,15 +224,16 @@ export function ConversationView({ conversation }: ConversationViewProps) {
                                 variant="default"
                                 className="text-xs px-2 py-1 h-6"
                                 onClick={() => handleSaveEdit(message.id)}
-                                disabled={!editedContent.trim()}
+                                disabled={!editedContent.trim() || !!processingMessageId}
                               >
-                                💾 Save
+                                {processingMessageId === message.id ? '⏳ Saving...' : '💾 Save'}
                               </Button>
                               <Button
                                 size="sm"
-                                variant="outline"
+                                variant="outline" 
                                 className="text-xs px-2 py-1 h-6"
                                 onClick={handleCancelEdit}
+                                disabled={!!processingMessageId}
                               >
                                 ❌ Cancel
                               </Button>
@@ -242,6 +257,7 @@ export function ConversationView({ conversation }: ConversationViewProps) {
                                     variant="outline"
                                     className="text-xs px-2 py-1 h-6"
                                     onClick={() => handleEditMessage(message.id, message.content)}
+                                    disabled={!!processingMessageId}
                                   >
                                     ✏️ Edit
                                   </Button>
@@ -253,8 +269,9 @@ export function ConversationView({ conversation }: ConversationViewProps) {
                                       variant="outline"
                                       className="text-xs px-2 py-1 h-6"
                                       onClick={() => handleApproveResponse(message.id)}
+                                      disabled={!!processingMessageId}
                                     >
-                                      ✓ Approve
+                                      {processingMessageId === message.id ? '⏳' : '✓'} {processingMessageId === message.id ? 'Processing...' : 'Approve'}
                                     </Button>
                                   )}
                                   
@@ -264,8 +281,9 @@ export function ConversationView({ conversation }: ConversationViewProps) {
                                       variant="outline"
                                       className="text-xs px-2 py-1 h-6"
                                       onClick={() => handleRejectResponse(message.id)}
+                                      disabled={!!processingMessageId}
                                     >
-                                      ✗ Reject
+                                      {processingMessageId === message.id ? '⏳' : '✗'} {processingMessageId === message.id ? 'Processing...' : 'Reject'}
                                     </Button>
                                   )}
                                 </>
@@ -302,7 +320,7 @@ export function ConversationView({ conversation }: ConversationViewProps) {
                 <div className="flex justify-end">
                   <Button
                     onClick={handleSendMessage}
-                    disabled={isLoading || !newMessage.trim()}
+                    disabled={isLoading || !newMessage.trim() || !!processingMessageId}
                   >
                     {isLoading ? 'Sending...' : 'Send Message'}
                   </Button>
