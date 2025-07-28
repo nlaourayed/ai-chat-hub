@@ -185,8 +185,8 @@ async function processRealChatraWebhook(payload: WebhookPayload, chatraAccountId
 async function handleRealChatraMessages(payload: WebhookPayload): Promise<void> {
   if (!payload.client?.chatId || !payload.messages) return
 
-  // Find the conversation
-  const conversation = await db.conversation.findUnique({
+  // Find or create the conversation
+  let conversation = await db.conversation.findUnique({
     where: { chatraConversationId: payload.client.chatId },
     include: {
       messages: {
@@ -197,9 +197,44 @@ async function handleRealChatraMessages(payload: WebhookPayload): Promise<void> 
     }
   })
 
+  // If conversation doesn't exist, create it
   if (!conversation) {
-    console.error('Conversation not found:', payload.client.chatId)
-    return
+    console.log('🆕 Creating new conversation for chatId:', payload.client.chatId)
+    
+    // Get the first active Chatra account (same logic as in the main webhook handler)
+    const chatraAccounts = await db.chatraAccount.findMany({
+      where: { isActive: true }
+    })
+    
+    if (chatraAccounts.length === 0) {
+      console.error('❌ No active Chatra accounts found for conversation creation')
+      return
+    }
+    
+    const chatraAccount = chatraAccounts[0]
+    
+    // Create the conversation
+    const newConversation = await db.conversation.create({
+      data: {
+        chatraConversationId: payload.client.chatId,
+        chatraAccountId: chatraAccount.id,
+        clientName: payload.client.name || payload.client.displayedName || 'Anonymous',
+        clientEmail: payload.client.email || null,
+        status: 'active',
+        createdAt: new Date(),
+        updatedAt: new Date()
+      },
+      include: {
+        messages: {
+          orderBy: { createdAt: 'desc' },
+          take: 10
+        },
+        chatraAccount: true
+      }
+    })
+    
+    conversation = newConversation
+    console.log('✅ Created new conversation:', conversation.id)
   }
 
   let hasNewMessages = false
@@ -264,8 +299,8 @@ async function handleRealChatraMessages(payload: WebhookPayload): Promise<void> 
     }
   }
 
-  // Update conversation timestamp if we have new messages
-  if (hasNewMessages && payload.messages.length > 0) {
+  // Always update conversation timestamp to trigger auto-refresh
+  if (payload.messages.length > 0) {
     const lastMessage = payload.messages[payload.messages.length - 1]
     await db.conversation.update({
       where: { id: conversation.id },
