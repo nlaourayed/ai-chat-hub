@@ -5,7 +5,7 @@ import { db } from '@/lib/db'
 import type { ChatraWebhookPayload as WebhookPayload, LLMResponse, ChatraMessage } from '@/types'
 
 // Handle CORS preflight requests
-export async function OPTIONS(request: NextRequest) {
+export async function OPTIONS() {
   return new NextResponse(null, {
     status: 200,
     headers: {
@@ -120,7 +120,7 @@ export async function POST(request: NextRequest) {
         console.log('💬 Processing', payload.messages.length, 'messages from Chatra')
       }
       try {
-        await handleRealChatraMessages(payload, chatraAccount.id)
+        await handleRealChatraMessages(payload)
         if (!isProduction) {
           console.log('✅ [DEBUG] handleRealChatraMessages completed successfully')
         }
@@ -182,7 +182,7 @@ async function processRealChatraWebhook(payload: WebhookPayload, chatraAccountId
 /**
  * Handle real Chatra messages and generate LLM responses
  */
-async function handleRealChatraMessages(payload: WebhookPayload, chatraAccountId: string): Promise<void> {
+async function handleRealChatraMessages(payload: WebhookPayload): Promise<void> {
   if (!payload.client?.chatId || !payload.messages) return
 
   // Find the conversation
@@ -271,86 +271,6 @@ async function handleRealChatraMessages(payload: WebhookPayload, chatraAccountId
         updatedAt: new Date()
       }
     })
-  }
-}
-
-/**
- * Handle new message events and generate LLM responses
- * Updated for correct Chatra chatFragment webhook structure
- */
-async function handleNewMessage(payload: WebhookPayload) {
-  try {
-    if (!payload.data?.id || !payload.data?.messages) {
-      return // No conversation ID or messages to process
-    }
-
-    // Get the latest client message from the fragment
-    const clientMessages = payload.data.messages.filter((msg: ChatraMessage) => msg.type === 'client')
-    if (clientMessages.length === 0) {
-      return // No client messages to respond to
-    }
-
-    const latestClientMessage = clientMessages[clientMessages.length - 1]
-
-    // Find the conversation in our database
-    const conversation = await db.conversation.findUnique({
-      where: { chatraConversationId: payload.data.id },
-      include: {
-        messages: {
-          orderBy: { createdAt: 'desc' },
-          take: 10 // Get last 10 messages for context
-        },
-        chatraAccount: true
-      }
-    })
-
-    if (!conversation) {
-      console.error('Conversation not found:', payload.data.id)
-      return
-    }
-
-    // Format conversation history for LLM
-    const conversationHistory = formatConversationHistory(conversation.messages.reverse())
-
-    // Generate LLM response using RAG
-    let llmResponse: LLMResponse
-    try {
-      llmResponse = await generateLLMResponse(
-        latestClientMessage.text || '',
-        conversationHistory,
-        true // Enable RAG
-      )
-    } catch (llmError) {
-      console.error('Error generating LLM response:', llmError)
-      // Fallback to a simple response
-      llmResponse = {
-        content: "I apologize, but I'm having trouble processing your request right now. A human agent will assist you shortly.",
-        confidence: 0.3
-      }
-    }
-
-    // Store the LLM-generated message in database
-    await db.message.create({
-      data: {
-        conversationId: conversation.id,
-        content: llmResponse.content,
-        senderType: 'llm',
-        senderName: 'AI Assistant',
-        messageType: 'text',
-        retrievedContext: llmResponse.retrievedContext ? JSON.stringify(llmResponse.retrievedContext) : null,
-        confidence: llmResponse.confidence,
-        isApproved: null // Pending human approval
-      }
-    })
-
-    // Note: In a real implementation, you might want to:
-    // 1. Send the response immediately if confidence is high
-    // 2. Queue for human review if confidence is low
-    // 3. Use WebSocket or Server-Sent Events to notify the dashboard
-
-    console.log('LLM response generated and stored for conversation:', payload.data.id)
-  } catch (error) {
-    console.error('Error handling new message:', error)
   }
 }
 

@@ -58,7 +58,7 @@ export async function retrieveContext(
       // Test if vector operations work
       const vectorTest = await db.$queryRaw`SELECT '1'::text WHERE EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'vector')`
       console.log('🔍 [RAG] Vector extension test:', vectorTest)
-    } catch (error) {
+    } catch {
       console.warn('⚠️ [RAG] pgvector extension not available, falling back to text search')
       
       // Fallback: Simple text search without vector similarity

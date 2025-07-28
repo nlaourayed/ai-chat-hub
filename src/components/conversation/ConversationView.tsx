@@ -17,24 +17,6 @@ export function ConversationView({ conversation }: ConversationViewProps) {
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
   const [editedContent, setEditedContent] = useState('')
 
-  // Safety check for undefined conversation
-  if (!conversation) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <div className="text-center">
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Conversation not found</h2>
-          <p className="text-gray-600">The requested conversation could not be loaded.</p>
-          <Link href="/dashboard" className="mt-4 inline-block">
-            <Button variant="outline" size="sm">
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to Dashboard
-            </Button>
-          </Link>
-        </div>
-      </div>
-    )
-  }
-
   const handleSendMessage = async () => {
     if (!newMessage.trim()) return
     
@@ -122,6 +104,24 @@ export function ConversationView({ conversation }: ConversationViewProps) {
     setEditingMessageId(null)
     setEditedContent('')
   }, [])
+
+  // Safety check for undefined conversation AFTER hooks
+  if (!conversation) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Conversation not found</h2>
+          <p className="text-gray-600">The requested conversation could not be loaded.</p>
+          <Link href="/dashboard" className="mt-4 inline-block">
+            <Button variant="outline" size="sm">
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back to Dashboard
+            </Button>
+          </Link>
+        </div>
+      </div>
+    )
+  }
 
   const clientDisplay = conversation?.clientName || conversation?.clientEmail || 'Anonymous User'
 
