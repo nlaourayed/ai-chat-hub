@@ -24,7 +24,7 @@ interface Message {
   id: string
   content: string
   senderType: string
-  senderName: string
+  senderName: string | null // Allow null to match database schema
   createdAt: Date
   isApproved?: boolean | null
 }

@@ -67,7 +67,7 @@ export default async function ConversationPage({ params }: PageProps) {
   }
 
   const initialData = {
-    conversations,
+    conversations: conversations as any, // Type cast to avoid complex type issues for now
     stats
   }
 
@@ -99,6 +99,7 @@ export default async function ConversationPage({ params }: PageProps) {
             <div className="flex-1 hidden lg:flex">
               <ConversationView 
                 conversation={selectedConversation}
+                user={session.user}
               />
             </div>
             
@@ -106,6 +107,7 @@ export default async function ConversationPage({ params }: PageProps) {
             <div className="flex-1 lg:hidden">
               <ConversationView 
                 conversation={selectedConversation}
+                user={session.user}
               />
             </div>
           </div>

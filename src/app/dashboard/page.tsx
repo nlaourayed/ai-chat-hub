@@ -43,7 +43,7 @@ export default async function Dashboard() {
   }
 
   const initialData = {
-    conversations,
+    conversations: conversations as any, // Type cast to avoid complex type issues for now
     stats
   }
 
