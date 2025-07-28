@@ -57,11 +57,34 @@ export async function approveMessage(messageId: string, extractToKnowledge: bool
             messages: {
               orderBy: { createdAt: 'asc' },
               take: 10
-            }
+            },
+            chatraAccount: true
           }
         }
       }
     })
+
+    // Send the approved message to Chatra
+    if (message.senderType === 'llm' && message.conversation.chatraAccount) {
+      const { sendMessageToChatra } = await import('./chatra')
+      
+      const success = await sendMessageToChatra(
+        message.conversation.chatraAccount.id,
+        message.conversation.chatraConversationId,
+        {
+          text: message.content,
+          sender_type: 'agent',
+          sender_name: session.user.name || 'AI Assistant'
+        }
+      )
+
+      if (!success) {
+        console.error('Failed to send approved message to Chatra')
+        // Note: We don't throw here because the message is still approved in our system
+      } else {
+        console.log('✅ Approved message sent to Chatra successfully')
+      }
+    }
 
     // Extract to knowledge base if it's an approved agent response to a client question
     if (extractToKnowledge && message.senderType === 'llm') {
