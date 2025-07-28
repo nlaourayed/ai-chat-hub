@@ -9,12 +9,31 @@ import { Textarea } from '@/components/ui/textarea'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { ArrowLeft } from 'lucide-react'
 import type { ConversationViewProps } from '@/types'
+import { approveMessage, rejectMessage, updateMessageContent } from '@/lib/actions'
 
 export function ConversationView({ conversation }: ConversationViewProps) {
   const [newMessage, setNewMessage] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
   const [editedContent, setEditedContent] = useState('')
+
+  // Safety check for undefined conversation
+  if (!conversation) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Conversation not found</h2>
+          <p className="text-gray-600">The requested conversation could not be loaded.</p>
+          <Link href="/dashboard" className="mt-4 inline-block">
+            <Button variant="outline" size="sm">
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back to Dashboard
+            </Button>
+          </Link>
+        </div>
+      </div>
+    )
+  }
 
   const handleSendMessage = async () => {
     if (!newMessage.trim()) return
@@ -40,7 +59,6 @@ export function ConversationView({ conversation }: ConversationViewProps) {
     
     try {
       console.log('🔄 Approving message:', messageId)
-      const { approveMessage } = await import('@/lib/actions')
       const result = await approveMessage(messageId, true)
       console.log('✅ Approve result:', result)
       
@@ -60,7 +78,6 @@ export function ConversationView({ conversation }: ConversationViewProps) {
     
     try {
       console.log('🔄 Rejecting message:', messageId)
-      const { rejectMessage } = await import('@/lib/actions')
       const result = await rejectMessage(messageId)
       console.log('✅ Reject result:', result)
       
@@ -89,7 +106,6 @@ export function ConversationView({ conversation }: ConversationViewProps) {
     
     try {
       console.log('🔄 Updating message:', messageId, 'with content:', editedContent.substring(0, 50) + '...')
-      const { updateMessageContent } = await import('@/lib/actions')
       const result = await updateMessageContent(messageId, editedContent)
       console.log('✅ Update result:', result)
       
@@ -107,7 +123,7 @@ export function ConversationView({ conversation }: ConversationViewProps) {
     setEditedContent('')
   }, [])
 
-  const clientDisplay = conversation.clientName || conversation.clientEmail || 'Anonymous User'
+  const clientDisplay = conversation?.clientName || conversation?.clientEmail || 'Anonymous User'
 
   return (
     <div className="space-y-6">
@@ -125,13 +141,13 @@ export function ConversationView({ conversation }: ConversationViewProps) {
               {clientDisplay}
             </h1>
             <div className="flex items-center space-x-2 mt-1">
-              <Badge variant={conversation.status === 'active' ? 'default' : 'secondary'}>
-                {conversation.status}
+              <Badge variant={conversation?.status === 'active' ? 'default' : 'secondary'}>
+                {conversation?.status || 'unknown'}
               </Badge>
               <span className="text-sm text-gray-500">
-                {conversation.chatraAccount.name}
+                {conversation?.chatraAccount?.name || 'Unknown Account'}
               </span>
-              {conversation.clientEmail && (
+              {conversation?.clientEmail && (
                 <span className="text-sm text-gray-500">
                   • {conversation.clientEmail}
                 </span>
@@ -151,7 +167,7 @@ export function ConversationView({ conversation }: ConversationViewProps) {
             <CardContent>
               <ScrollArea className="h-96 w-full">
                 <div className="space-y-4 pr-4">
-                  {conversation.messages.map((message, index) => (
+                  {(conversation?.messages || []).map((message, index) => (
                     <div
                       key={message.id || `message-${index}`}
                       className={`flex ${
@@ -321,7 +337,7 @@ export function ConversationView({ conversation }: ConversationViewProps) {
           </Card>
 
           {/* Show RAG context for LLM messages */}
-          {conversation.messages
+          {(conversation?.messages || [])
             .filter(m => m.senderType === 'llm' && m.retrievedContext)
             .slice(-1)
             .map((message) => {
